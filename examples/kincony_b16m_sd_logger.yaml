@@ -1,0 +1,115 @@
+substitutions:
+  device_name: kincony-b16m-sdlogger
+  friendly_name: KinCony B16M SD Logger
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  comment: Beispiel fuer KinCony B16M mit SD-Karten-Logging
+  platformio_options:
+    board_build.flash_mode: dio
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: arduino
+
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+
+api:
+
+ota:
+  - platform: esphome
+
+ethernet:
+  type: W5500
+  clk_pin: GPIO42
+  mosi_pin: GPIO43
+  miso_pin: GPIO44
+  cs_pin: GPIO41
+  interrupt_pin: GPIO2
+  reset_pin: GPIO1
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+
+external_components:
+  - source: github://kwittwer/Esphome_sdcard
+
+i2c:
+  - id: bus_a
+    sda: GPIO38
+    scl: GPIO39
+    scan: true
+
+pcf8574:
+  - id: b16m_outputs
+    i2c_id: bus_a
+    address: 0x25
+    pcf8575: true
+  - id: b16m_inputs
+    i2c_id: bus_a
+    address: 0x24
+    pcf8575: true
+
+sensor:
+  - platform: uptime
+    id: uptime_seconds
+    name: "${friendly_name} Uptime"
+    update_interval: 60s
+
+binary_sensor:
+  - platform: gpio
+    id: input_1
+    name: "${friendly_name} Input 1"
+    pin:
+      pcf8574: b16m_inputs
+      number: 0
+      mode:
+        input: true
+    on_press:
+      - lambda: |-
+          id(sd_logger).log_event("Input 1 pressed");
+    on_release:
+      - lambda: |-
+          id(sd_logger).log_event("Input 1 released");
+
+switch:
+  - platform: gpio
+    id: output_1
+    name: "${friendly_name} Output 1"
+    pin:
+      pcf8574: b16m_outputs
+      number: 0
+      mode:
+        output: true
+    inverted: true
+    on_turn_on:
+      - lambda: |-
+          id(sd_logger).log_event("Output 1 turned on");
+    on_turn_off:
+      - lambda: |-
+          id(sd_logger).log_event("Output 1 turned off");
+
+sdcard_logger:
+  id: sd_logger
+  # Auf vielen B16M-Revisionen ist der SD-Karten-CS-Pin als SD_CS/GPIO13 beschriftet.
+  # Bitte vor dem Flashen mit dem Schaltplan bzw. Aufdruck des eigenen Boards pruefen.
+  cs_pin: GPIO13
+  time_id: sntp_time
+  base_dir: /logs
+
+interval:
+  - interval: 60s
+    then:
+      - lambda: |-
+          id(sd_logger).log_measurements(
+            "measurements.csv",
+            id(uptime_seconds).state,
+            id(input_1).state ? 1 : 0,
+            id(output_1).state ? 1 : 0
+          );
