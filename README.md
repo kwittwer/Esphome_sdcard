@@ -1,6 +1,6 @@
 # ESPHome SD Card Logger
 
-Diese Repository stellt eine ESPHome External Component bereit, um eine SD-Karte mit Dateisystem einzubinden und Messwerte/Ereignisse aus `lambda` heraus zu loggen.
+Dieses Repository stellt eine ESPHome External Component bereit, um eine SD-Karte mit Dateisystem einzubinden und Messwerte/Ereignisse aus `lambda` heraus zu loggen.
 
 ## Features
 
@@ -62,4 +62,4 @@ Diese Zeile wird in eine Datei mit aktuellem Datum geschrieben, z. B. `/logs/202
 
 ## Beispielkonfigurationen
 
-- KinCony B16M: `/home/runner/work/Esphome_sdcard/Esphome_sdcard/examples/kincony_b16m_sd_logger.yaml`
+- KinCony B16M: `examples/kincony_b16m_sd_logger.yaml`
