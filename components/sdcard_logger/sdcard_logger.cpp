@@ -11,7 +11,7 @@ static const char *const TAG = "sdcard_logger";
 
 void SDCardLogger::setup() {
   if (this->cs_pin_ == nullptr) {
-    ESP_LOGE(TAG, "Keine CS-Pin Konfiguration gefunden.");
+    ESP_LOGE(TAG, "No CS pin configuration found.");
     this->mark_failed();
     return;
   }
@@ -19,19 +19,19 @@ void SDCardLogger::setup() {
   this->cs_pin_->setup();
 
   if (!SD.begin(this->cs_pin_->get_pin())) {
-    ESP_LOGE(TAG, "SD-Karte konnte nicht eingebunden werden.");
+    ESP_LOGE(TAG, "Failed to mount SD card.");
     this->mark_failed();
     return;
   }
 
   this->mounted_ = true;
-  ESP_LOGI(TAG, "SD-Karte erfolgreich eingebunden.");
+  ESP_LOGI(TAG, "SD card mounted successfully.");
 }
 
 void SDCardLogger::dump_config() {
   ESP_LOGCONFIG(TAG, "SD Card Logger:");
   LOG_PIN("  CS Pin: ", this->cs_pin_);
-  ESP_LOGCONFIG(TAG, "  Basisverzeichnis: %s", this->base_dir_.c_str());
+  ESP_LOGCONFIG(TAG, "  Base directory: %s", this->base_dir_.c_str());
 }
 
 float SDCardLogger::get_setup_priority() const { return setup_priority::HARDWARE; }
@@ -71,13 +71,13 @@ void SDCardLogger::log_event(const std::string &event_text) {
 
 std::string SDCardLogger::make_timestamp_() const {
   if (this->time_source_ == nullptr) {
-    ESP_LOGW(TAG, "Keine Time-Komponente gesetzt, fallback Zeitstempel wird verwendet.");
+    ESP_LOGW(TAG, "No time component set, using fallback timestamp.");
     return "1970-01-01 00:00:00";
   }
 
   auto now = this->time_source_->now();
   if (!now.is_valid()) {
-    ESP_LOGW(TAG, "Zeit ist noch nicht gültig, fallback Zeitstempel wird verwendet.");
+    ESP_LOGW(TAG, "Time is not yet valid, using fallback timestamp.");
     return "1970-01-01 00:00:00";
   }
 
@@ -115,7 +115,7 @@ std::string SDCardLogger::build_path_(const std::string &filename) const {
 
 bool SDCardLogger::append_line_(const std::string &filename, const std::string &line) {
   if (!this->mounted_) {
-    ESP_LOGE(TAG, "SD-Karte ist nicht eingebunden.");
+    ESP_LOGE(TAG, "SD card is not mounted.");
     return false;
   }
 
@@ -127,7 +127,7 @@ bool SDCardLogger::append_line_(const std::string &filename, const std::string &
   }
 
   if (!file) {
-    ESP_LOGE(TAG, "Datei konnte nicht geöffnet werden: %s", path.c_str());
+    ESP_LOGE(TAG, "Failed to open file: %s", path.c_str());
     return false;
   }
 
@@ -135,7 +135,7 @@ bool SDCardLogger::append_line_(const std::string &filename, const std::string &
   file.close();
 
   if (bytes_written == 0) {
-    ESP_LOGE(TAG, "Datei konnte nicht beschrieben werden: %s", path.c_str());
+    ESP_LOGE(TAG, "Failed to write to file: %s", path.c_str());
     return false;
   }
 
