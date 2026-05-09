@@ -123,6 +123,11 @@ bool SDCardLogger::append_line_(const std::string &filename, const std::string &
 
   File file = SD.open(path.c_str(), FILE_APPEND);
   if (!file) {
+    if (SD.exists(path.c_str())) {
+      ESP_LOGE(TAG, "Failed to open existing file for append: %s", path.c_str());
+      return false;
+    }
+
     file = SD.open(path.c_str(), FILE_WRITE);
   }
 
