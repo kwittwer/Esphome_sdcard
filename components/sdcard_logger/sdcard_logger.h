@@ -8,6 +8,10 @@
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
 
+#ifdef USE_WEBSERVER
+#include "esphome/components/web_server_base/web_server_base.h"
+#endif
+
 namespace esphome {
 namespace sdcard_logger {
 
@@ -23,6 +27,9 @@ class SDCardLogger : public Component {
 
   void log_measurements(const std::string &filename, const std::vector<std::string> &values);
   void log_event(const std::string &event_text);
+
+  const std::string &get_base_dir() const { return this->base_dir_; }
+  bool is_mounted() const { return this->mounted_; }
 
   template<typename... Args> void log_measurements(const std::string &filename, Args... values) {
     std::vector<std::string> string_values;
@@ -42,6 +49,10 @@ class SDCardLogger : public Component {
   std::string build_path_(const std::string &filename) const;
   bool append_line_(const std::string &filename, const std::string &line);
 
+#ifdef USE_WEBSERVER
+  void setup_web_handler_();
+#endif
+
   template<typename T> std::string to_string_(const T &value) const {
     std::ostringstream stream;
     stream << value;
@@ -52,6 +63,32 @@ class SDCardLogger : public Component {
   std::string to_string_(const char *value) const;
   std::string to_string_(const String &value) const;
 };
+
+#ifdef USE_WEBSERVER
+
+class SDCardFileHandler : public AsyncWebHandler {
+ public:
+  explicit SDCardFileHandler(SDCardLogger *logger) : logger_(logger) {}
+
+  bool canHandle(AsyncWebServerRequest *request) const override;
+  void handleRequest(AsyncWebServerRequest *request) override;
+  bool isRequestHandlerTrivial() const override { return false; }
+
+ protected:
+  SDCardLogger *logger_;
+
+  std::string build_list_html_() const;
+  std::string format_size_(size_t bytes) const;
+  bool is_valid_path_(const std::string &name) const;
+  static std::string html_escape_(const std::string &s);
+  static std::string url_encode_(const std::string &s);
+
+  void handle_list_(AsyncWebServerRequest *request);
+  void handle_download_(AsyncWebServerRequest *request);
+  void handle_delete_(AsyncWebServerRequest *request);
+};
+
+#endif  // USE_WEBSERVER
 
 }  // namespace sdcard_logger
 }  // namespace esphome

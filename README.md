@@ -8,6 +8,7 @@ Dieses Repository stellt eine ESPHome External Component bereit, um eine SD-Kart
 - Messwerte mit `;` getrennt loggen
 - Jede Messwert-Zeile startet mit Datum und Uhrzeit (`YYYY-MM-DD HH:MM:SS`)
 - Ereignisse in Tagesdateien (`YYYY-MM-DD.log`) schreiben
+- **Web-Dateimanager** (automatisch aktiv wenn `web_server:` konfiguriert ist): Dateien im Browser auflisten, herunterladen und löschen
 
 ## Verwendung
 
@@ -59,6 +60,33 @@ on_boot:
 ```
 
 Diese Zeile wird in eine Datei mit aktuellem Datum geschrieben, z. B. `/logs/2026-05-09.log`.
+
+## Web-Dateimanager
+
+Wenn `web_server:` im Projekt konfiguriert ist, aktiviert sich der Web-Dateimanager **automatisch** – keine zusätzliche Konfiguration nötig.
+
+```yaml
+web_server:
+  port: 80
+
+sdcard_logger:
+  id: sd_logger
+  cs_pin: GPIO5
+  time_id: sntp_time
+  base_dir: /logs
+```
+
+Verfügbare Endpunkte:
+
+| URL | Beschreibung |
+|-----|--------------|
+| `http://<ip>/sd` | Dateiliste der SD-Karte anzeigen |
+| `http://<ip>/sd/download?path=<dateiname>` | Datei herunterladen |
+| `http://<ip>/sd/delete?path=<dateiname>` | Datei löschen (Weiterleitung zu `/sd`) |
+
+Die Dateiliste wird als übersichtliche HTML-Seite mit Download- und Lösch-Schaltflächen dargestellt. Ist `USE_WEBSERVER_AUTH` konfiguriert, gelten die Zugangsdaten des Web-Servers auch für den Dateimanager.
+
+> **Hinweis:** Der Web-Dateimanager listet nur Dateien direkt in `base_dir` auf – keine Unterverzeichnisse. Gleichzeitiger SD-Zugriff aus dem Hauptprogramm und dem Web-Handler sollte vermieden werden.
 
 ## Beispielkonfigurationen
 
