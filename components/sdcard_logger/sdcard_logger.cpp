@@ -255,6 +255,24 @@ bool SDCardFileHandler::is_valid_path_(const std::string &name) const {
   return true;
 }
 
+std::string SDCardFileHandler::url_encode_(const std::string &s) {
+  static const char hex[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(s.size() * 3);
+  for (unsigned char c : s) {
+    // Unreserved characters per RFC 3986 – pass through unchanged
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+        c == '.' || c == '~') {
+      out += static_cast<char>(c);
+    } else {
+      out += '%';
+      out += hex[c >> 4];
+      out += hex[c & 0x0F];
+    }
+  }
+  return out;
+}
+
 std::string SDCardFileHandler::html_escape_(const std::string &s) {
   std::string out;
   out.reserve(s.size());
@@ -342,6 +360,7 @@ std::string SDCardFileHandler::build_list_html_() const {
 
           std::string size_str = this->format_size_(entry.size());
           std::string safe_name = SDCardFileHandler::html_escape_(name);
+          std::string url_name = SDCardFileHandler::url_encode_(name);
           found = true;
 
           html += "<tr><td>";
@@ -349,9 +368,9 @@ std::string SDCardFileHandler::build_list_html_() const {
           html += "</td><td>";
           html += size_str;
           html += "</td><td><a class=\"dl\" href=\"/sd/download?path=";
-          html += safe_name;
+          html += url_name;
           html += "\">&#11015; Download</a></td><td><a class=\"del\" href=\"/sd/delete?path=";
-          html += safe_name;
+          html += url_name;
           html += "\" onclick=\"return confirm('Delete ";
           html += safe_name;
           html += "?')\">&#128465; Delete</a></td></tr>";

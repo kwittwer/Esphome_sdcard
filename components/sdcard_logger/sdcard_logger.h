@@ -81,6 +81,7 @@ class SDCardFileHandler : public AsyncWebHandler {
   std::string format_size_(size_t bytes) const;
   bool is_valid_path_(const std::string &name) const;
   static std::string html_escape_(const std::string &s);
+  static std::string url_encode_(const std::string &s);
 
   void handle_list_(AsyncWebServerRequest *request);
   void handle_download_(AsyncWebServerRequest *request);
