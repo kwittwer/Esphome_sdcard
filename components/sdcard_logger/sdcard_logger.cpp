@@ -26,6 +26,10 @@ void SDCardLogger::setup() {
 
   this->mounted_ = true;
   ESP_LOGI(TAG, "SD card mounted successfully.");
+
+#ifdef USE_WEBSERVER
+  this->setup_web_handler_();
+#endif
 }
 
 void SDCardLogger::dump_config() {
@@ -155,6 +159,218 @@ std::string SDCardLogger::to_string_(const char *value) const {
 }
 
 std::string SDCardLogger::to_string_(const String &value) const { return value.c_str(); }
+
+// ---------------------------------------------------------------------------
+// Web file manager (only compiled when web_server is present in the project)
+// ---------------------------------------------------------------------------
+#ifdef USE_WEBSERVER
+
+void SDCardLogger::setup_web_handler_() {
+  auto *wsb = web_server_base::global_web_server_base;
+  if (wsb == nullptr) {
+    return;
+  }
+  // WebServerBase::add_handler stores the pointer and manages its lifetime.
+  wsb->add_handler(new SDCardFileHandler(this));
+  ESP_LOGI(TAG, "SD card web file manager enabled – open /sd in the browser");
+}
+
+// --- SDCardFileHandler ---
+
+bool SDCardFileHandler::canHandle(AsyncWebServerRequest *request) const {
+  const auto &url = request->url();
+  return url == "/sd" || url == "/sd/download" || url == "/sd/delete";
+}
+
+void SDCardFileHandler::handleRequest(AsyncWebServerRequest *request) {
+  const auto &url = request->url();
+  if (url == "/sd") {
+    this->handle_list_(request);
+  } else if (url == "/sd/download") {
+    this->handle_download_(request);
+  } else if (url == "/sd/delete") {
+    this->handle_delete_(request);
+  } else {
+    request->send(404, "text/plain", "Not found");
+  }
+}
+
+void SDCardFileHandler::handle_list_(AsyncWebServerRequest *request) {
+  String html = this->build_list_html_().c_str();
+  request->send(200, "text/html; charset=utf-8", html);
+}
+
+void SDCardFileHandler::handle_download_(AsyncWebServerRequest *request) {
+  if (!request->hasParam("path")) {
+    request->send(400, "text/plain", "Missing path parameter");
+    return;
+  }
+  const std::string name = request->getParam("path")->value().c_str();
+  if (!this->is_valid_path_(name)) {
+    request->send(400, "text/plain", "Invalid path");
+    return;
+  }
+  const std::string &base = this->logger_->get_base_dir();
+  std::string full_path = (base == "/") ? "/" + name : base + "/" + name;
+
+  if (!SD.exists(full_path.c_str())) {
+    request->send(404, "text/plain", "File not found");
+    return;
+  }
+  request->send(SD, full_path.c_str(), "application/octet-stream", true);
+}
+
+void SDCardFileHandler::handle_delete_(AsyncWebServerRequest *request) {
+  if (!request->hasParam("path")) {
+    request->send(400, "text/plain", "Missing path parameter");
+    return;
+  }
+  const std::string name = request->getParam("path")->value().c_str();
+  if (!this->is_valid_path_(name)) {
+    request->send(400, "text/plain", "Invalid path");
+    return;
+  }
+  const std::string &base = this->logger_->get_base_dir();
+  std::string full_path = (base == "/") ? "/" + name : base + "/" + name;
+
+  if (!SD.exists(full_path.c_str())) {
+    request->send(404, "text/plain", "File not found");
+    return;
+  }
+  if (SD.remove(full_path.c_str())) {
+    request->redirect("/sd");
+  } else {
+    request->send(500, "text/plain", "Failed to delete file");
+  }
+}
+
+bool SDCardFileHandler::is_valid_path_(const std::string &name) const {
+  if (name.empty()) {
+    return false;
+  }
+  // Reject absolute paths and any directory traversal attempts
+  if (name[0] == '/' || name.find("..") != std::string::npos) {
+    return false;
+  }
+  return true;
+}
+
+std::string SDCardFileHandler::html_escape_(const std::string &s) {
+  std::string out;
+  out.reserve(s.size());
+  for (char c : s) {
+    switch (c) {
+      case '&':
+        out += "&amp;";
+        break;
+      case '<':
+        out += "&lt;";
+        break;
+      case '>':
+        out += "&gt;";
+        break;
+      case '"':
+        out += "&quot;";
+        break;
+      case '\'':
+        out += "&#39;";
+        break;
+      default:
+        out += c;
+        break;
+    }
+  }
+  return out;
+}
+
+std::string SDCardFileHandler::format_size_(size_t bytes) const {  char buf[32];
+  if (bytes < 1024) {
+    snprintf(buf, sizeof(buf), "%u B", (unsigned) bytes);
+  } else if (bytes < 1024 * 1024) {
+    snprintf(buf, sizeof(buf), "%.1f KiB", bytes / 1024.0f);
+  } else {
+    snprintf(buf, sizeof(buf), "%.1f MiB", bytes / (1024.0f * 1024.0f));
+  }
+  return buf;
+}
+
+std::string SDCardFileHandler::build_list_html_() const {
+  const std::string &base = this->logger_->get_base_dir();
+
+  std::string html =
+      "<!DOCTYPE html><html lang=\"en\"><head>"
+      "<meta charset=\"utf-8\">"
+      "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+      "<title>SD Card Files</title>"
+      "<style>"
+      "*{box-sizing:border-box}"
+      "body{font-family:sans-serif;margin:0;padding:20px;background:#f4f4f4}"
+      ".card{background:#fff;border-radius:8px;padding:24px;box-shadow:0 2px 6px rgba(0,0,0,.12);max-width:860px;margin:0 auto}"
+      "h1{margin:0 0 4px;color:#333;font-size:1.4em}"
+      ".dir{color:#666;font-size:.9em;margin:0 0 16px}"
+      "table{width:100%;border-collapse:collapse}"
+      "th{background:#3c8dbc;color:#fff;padding:10px 12px;text-align:left;font-weight:600}"
+      "td{padding:9px 12px;border-bottom:1px solid #eee}"
+      "tr:last-child td{border-bottom:none}"
+      "tr:hover td{background:#f9f9f9}"
+      "a.dl{color:#3c8dbc;text-decoration:none}"
+      "a.dl:hover{text-decoration:underline}"
+      "a.del{color:#c0392b;text-decoration:none}"
+      "a.del:hover{text-decoration:underline}"
+      ".empty{color:#999;font-style:italic;text-align:center;padding:20px}"
+      "</style></head><body><div class=\"card\">"
+      "<h1>&#128193; SD Card File Manager</h1>"
+      "<p class=\"dir\">Directory: <code>";
+  html += SDCardFileHandler::html_escape_(base);
+  html +=
+      "</code></p>"
+      "<table><tr><th>File</th><th>Size</th><th>Download</th><th>Delete</th></tr>";
+
+  if (!this->logger_->is_mounted()) {
+    html += "<tr><td colspan=\"4\" class=\"empty\">SD card is not mounted.</td></tr>";
+  } else {
+    File dir = SD.open(base.c_str());
+    bool found = false;
+    if (dir && dir.isDirectory()) {
+      File entry = dir.openNextFile();
+      while (entry) {
+        if (!entry.isDirectory()) {
+          // entry.name() may return the full path on some SDK versions – extract basename
+          std::string full_name = entry.name();
+          size_t slash = full_name.rfind('/');
+          std::string name = (slash != std::string::npos) ? full_name.substr(slash + 1) : full_name;
+
+          std::string size_str = this->format_size_(entry.size());
+          std::string safe_name = SDCardFileHandler::html_escape_(name);
+          found = true;
+
+          html += "<tr><td>";
+          html += safe_name;
+          html += "</td><td>";
+          html += size_str;
+          html += "</td><td><a class=\"dl\" href=\"/sd/download?path=";
+          html += safe_name;
+          html += "\">&#11015; Download</a></td><td><a class=\"del\" href=\"/sd/delete?path=";
+          html += safe_name;
+          html += "\" onclick=\"return confirm('Delete ";
+          html += safe_name;
+          html += "?')\">&#128465; Delete</a></td></tr>";
+        }
+        entry.close();
+        entry = dir.openNextFile();
+      }
+      dir.close();
+    }
+    if (!found) {
+      html += "<tr><td colspan=\"4\" class=\"empty\">No files found.</td></tr>";
+    }
+  }
+
+  html += "</table></div></body></html>";
+  return html;
+}
+
+#endif  // USE_WEBSERVER
 
 }  // namespace sdcard_logger
 }  // namespace esphome
